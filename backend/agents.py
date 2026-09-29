@@ -161,16 +161,16 @@ def metrics_agent(m):
 
 
 # ---------------- HINDSIGHT AGENT ----------------
-
 def hindsight_agent(hs, incident, log_r, met_r):
+    current_errors = [
+        e["message"]
+        for e in log_r["errors"]
+    ]
 
     query = (
         f"{incident['service']} "
         f"{incident['title']} "
-        + " ".join(
-            e["message"]
-            for e in log_r["errors"]
-        )
+        + " ".join(current_errors)
         + " "
         + " ".join(
             a["metric"].replace("_", " ")
@@ -179,44 +179,78 @@ def hindsight_agent(hs, incident, log_r, met_r):
         + " connection pool database"
     )
 
-    res = hs.search(query, k=3)
+    res = hs.search(query, k=10)
 
-    top = (
-        res["results"][0]
-        if res["results"]
-        else None
+    matches = res["results"]
+
+    if matches:
+        summary = (
+            f"Found {len(matches)} similar historical incident(s)"
+        )
+    else:
+        summary = "No similar previous incidents found"
+
+    # Analyze whether the current problem is repeating
+    repeated_error = None
+
+    for error in log_r["errors"]:
+        if error["count"] >= 3:
+            repeated_error = error
+            break
+
+    historical_count = len(matches)
+
+    is_repeat = (
+        repeated_error is not None
+        or historical_count > 0
     )
 
-    if top:
+    matching_ids = [
+        x["id"]
+        for x in matches
+        if x.get("id")
+    ]
 
-        rel = (
-            f" (relevance {top['relevance']})"
-            if top.get("relevance") is not None
-            else ""
+    previous_causes = [
+        x["root_cause"]
+        for x in matches
+        if x.get("root_cause")
+    ]
+
+    previous_fixes = [
+        x["fix"]
+        for x in matches
+        if x.get("fix")
+    ]
+
+    repeat_analysis = {
+        "is_repeat": is_repeat,
+        "current_error_repeated": repeated_error is not None,
+        "current_error_count": (
+            repeated_error["count"]
+            if repeated_error
+            else 0
+        ),
+        "historical_count": historical_count,
+        "matching_incidents": matching_ids,
+        "previous_causes": previous_causes[:5],
+        "previous_fixes": previous_fixes[:5],
+        "pattern": (
+            "Recurring incident"
+            if is_repeat
+            else "No known recurrence"
         )
-
-        summary = (
-            f"Found similar incident "
-            f"{top['id']}{rel}"
-        )
-
-    else:
-
-        summary = (
-            "No similar previous incidents found"
-        )
+    }
 
     return {
         **res,
         "summary": summary,
-        "query": query
+        "query": query,
+        "repeat_analysis": repeat_analysis
     }
 
-
 # ---------------- RESOLUTION AGENT ----------------
-
 def _fallback(incident, log_r, met_r, hs_r):
-
     pool_exc = any(
         "ConnectionPool" in e["message"]
         for e in log_r["errors"]
@@ -231,47 +265,39 @@ def _fallback(incident, log_r, met_r, hs_r):
         None
     )
 
-    top = (
-        hs_r["results"][0]
-        if hs_r["results"]
-        else None
-    )
+    history = hs_r.get("repeat_analysis", {})
+
+    matches = history.get("matching_incidents", [])
+    previous_causes = history.get("previous_causes", [])
+    previous_fixes = history.get("previous_fixes", [])
 
     if not (pool_exc or db):
-
         return {
-            "root_cause":
-                "Undetermined - insufficient evidence",
-
+            "root_cause": "Undetermined - insufficient evidence",
             "confidence": 0.3,
-
             "evidence": [
                 log_r["summary"],
                 met_r["summary"],
-                "No matching historical incident"
+                "No sufficient evidence for a confirmed root cause"
             ],
-
-            "historical_reference": "None",
-
-            "recommended_action":
-                "Escalate to on-call engineer",
-
-            "expected_result":
-                "Manual investigation"
+            "historical_reference": (
+                matches[0] if matches else "None"
+            ),
+            "recommended_action": (
+                "Escalate to on-call engineer for manual investigation"
+            ),
+            "expected_result": "Manual investigation required"
         }
 
     evidence = []
 
     if db:
-
         evidence.append(
             f"Database connections reached "
-            f"{db['value']}/"
-            f"{incident['metrics']['pool_max']}"
+            f"{db['value']}/{incident['metrics']['pool_max']}"
         )
 
     if pool_exc:
-
         n = next(
             e["count"]
             for e in log_r["errors"]
@@ -283,43 +309,61 @@ def _fallback(incident, log_r, met_r, hs_r):
             f"appears repeatedly ({n} times)"
         )
 
-    evidence.append(
-        f"Similar previous incident "
-        f"{top['id']} found in Hindsight"
-        if top
-        else
-        "No similar previous incident found in Hindsight"
+    if matches:
+        evidence.append(
+            f"Similar historical incidents found: "
+            f"{', '.join(matches)}"
+        )
+
+    if previous_causes:
+        evidence.append(
+            f"Previous causes included: "
+            f"{'; '.join(previous_causes[:3])}"
+        )
+
+    if previous_fixes:
+        evidence.append(
+            f"Previous successful fixes included: "
+            f"{'; '.join(previous_fixes[:3])}"
+        )
+
+    repeat_text = (
+        "The current incident appears to be a recurring problem."
+        if history.get("is_repeat")
+        else "No confirmed recurrence was found."
     )
+
+    evidence.append(repeat_text)
 
     conf = (
         0.6
         + (0.15 if pool_exc else 0)
         + (0.10 if db else 0)
-        + (0.06 if top else 0)
+        + (0.06 if matches else 0)
     )
 
+    action = (
+        "Reduce the database connection pool and restart payment-api."
+    )
+
+    if previous_fixes:
+        action += (
+            " This follows fixes that resolved similar historical incidents."
+        )
+
     return {
-        "root_cause":
-            "Database connection pool exhaustion",
-
-        "confidence":
-            round(conf, 2),
-
-        "evidence":
-            evidence,
-
-        "historical_reference":
-            top["id"] if top else "None",
-
-        "recommended_action":
-            "Reduce database connection pool and restart payment-api.",
-
-        "expected_result":
-            "Connections drop below capacity; "
+        "root_cause": "Database connection pool exhaustion",
+        "confidence": round(conf, 2),
+        "evidence": evidence,
+        "historical_reference": (
+            matches[0] if matches else "None"
+        ),
+        "recommended_action": action,
+        "expected_result": (
+            "Database connections drop below capacity, "
             "error rate and latency return to normal."
+        )
     }
-
-
 def _validate(res, hs_r):
 
     if not all(
@@ -380,17 +424,18 @@ def resolution_agent(
     )
 
     user = prompts.RESOLUTION_USER.format(
-        incident=json.dumps(
-            {
-                "id": incident["id"],
-                "service": incident["service"],
-                "metrics": incident["metrics"]
-            }
-        ),
-        logs=json.dumps(log_r),
-        metrics=json.dumps(met_r),
-        history=history or "[]"
+    incident=json.dumps({
+        "id": incident["id"],
+        "service": incident["service"],
+        "metrics": incident["metrics"]
+    }),
+    logs=json.dumps(log_r),
+    metrics=json.dumps(met_r),
+    history=history or "[]",
+    repeat_analysis=json.dumps(
+        hs_r.get("repeat_analysis", {})
     )
+)
 
     try:
 

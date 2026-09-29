@@ -1,43 +1,80 @@
-[{
-        "id": "INC-001",
-        "service": "payment-api",
-        "problem": "Database connection exhaustion",
-        "root_cause": "Connection pool configuration problem",
-        "fix": "Reduce connection pool size and restart service",
-        "result": "Resolved",
-        "demo": true
-    },
-    {
-        "id": "INC-002",
-        "service": "payment-api",
-        "problem": "High database latency",
-        "root_cause": "Too many active connections",
-        "fix": "Restart service and reduce pool",
-        "result": "Resolved",
-        "demo": true
-    },
-    {
-        "id": "INC-003",
-        "service": "order-api",
-        "problem": "Database timeout",
-        "root_cause": "Connection exhaustion",
-        "fix": "Reduce database connections",
-        "result": "Resolved",
-        "demo": true
-    },
-    {
-        "id": "INC-004",
-        "service": "payment-api",
-        "problem": "Database connection exhaustion",
-        "symptoms": "error_rate 35%, latency 7800ms, db_connections 100/100, ConnectionPoolExhaustedException",
-        "root_cause": "Database connection pool exhaustion",
-        "evidence": [
-            "Database connections reached 100/100",
-            "ConnectionPoolExhaustedException appears repeatedly (5 times)",
-            "Similar previous incident INC-002 found in Hindsight"
-        ],
-        "fix": "Reduce database connection pool and restart payment-api.",
-        "result": "Resolved",
-        "demo": false
-    }
+[
+  {
+    "id": "INC-001",
+    "service": "payment-api",
+    "problem": "Database connection exhaustion",
+    "root_cause": "Connection pool configuration problem",
+    "fix": "Reduce connection pool size and restart service",
+    "result": "Resolved",
+    "demo": true
+  },
+  {
+    "id": "INC-002",
+    "service": "payment-api",
+    "problem": "High database latency",
+    "root_cause": "Too many active connections",
+    "fix": "Restart service and reduce pool",
+    "result": "Resolved",
+    "demo": true
+  },
+  {
+    "id": "INC-003",
+    "service": "order-api",
+    "problem": "Database timeout",
+    "root_cause": "Connection exhaustion",
+    "fix": "Reduce database connections",
+    "result": "Resolved",
+    "demo": true
+  },
+  {
+    "id": "INC-004",
+    "service": "payment-api",
+    "problem": "Database connection exhaustion",
+    "symptoms": "error_rate 35%, latency 7800ms, db_connections 100/100, ConnectionPoolExhaustedException",
+    "root_cause": "Database connection pool exhaustion",
+    "evidence": [
+      "Database connections reached 100/100",
+      "ConnectionPoolExhaustedException appears repeatedly (5 times)",
+      "Similar previous incident INC-002 found in Hindsight"
+    ],
+    "fix": "Reduce database connection pool and restart payment-api.",
+    "result": "Resolved",
+    "demo": false
+  },
+  {
+    "id": "INC-005",
+    "service": "payment-api",
+    "problem": "Database connection exhaustion",
+    "symptoms": "error_rate 35%, latency 7800ms, db_connections 100/100, ConnectionPoolExhaustedException",
+    "root_cause": "Database connection pool exhaustion",
+    "evidence": [
+      "Database connections reached 100/100",
+      "ConnectionPoolExhaustedException appears repeatedly (5 times)",
+      "Similar historical incidents found: INC-004, INC-002, INC-001, INC-003",
+      "Previous causes included: Database connection pool exhaustion; Too many active connections; Connection pool configuration problem",
+      "Previous successful fixes included: Reduce database connection pool and restart payment-api.; Restart service and reduce pool; Reduce connection pool size and restart service",
+      "The current incident appears to be a recurring problem."
+    ],
+    "fix": "Reduce the database connection pool and restart payment-api. This follows fixes that resolved similar historical incidents.",
+    "result": "Resolved",
+    "demo": false
+  },
+  {
+    "id": "INC-006",
+    "service": "payment-api",
+    "problem": "Database connection exhaustion",
+    "symptoms": "error_rate 35%, latency 7800ms, db_connections 100/100, ConnectionPoolExhaustedException",
+    "root_cause": "Database connection pool exhaustion",
+    "evidence": [
+      "Database connections reached 100/100",
+      "ConnectionPoolExhaustedException appears repeatedly (5 times)",
+      "Similar historical incidents found: INC-004, INC-002, INC-001, INC-005, INC-003",
+      "Previous causes included: Database connection pool exhaustion; Too many active connections; Connection pool configuration problem",
+      "Previous successful fixes included: Reduce database connection pool and restart payment-api.; Restart service and reduce pool; Reduce connection pool size and restart service",
+      "The current incident appears to be a recurring problem."
+    ],
+    "fix": "Reduce the database connection pool and restart payment-api. This follows fixes that resolved similar historical incidents.",
+    "result": "Resolved",
+    "demo": false
+  }
 ]
