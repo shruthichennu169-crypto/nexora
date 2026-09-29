@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 const api = async (path, method = "GET") => {
-  const r = await fetch("/api" + path, { method });
+  const r = await fetch(`${API_URL}/api${path}`, { method });
 
   if (!r.ok) {
     let d;
@@ -13,7 +14,6 @@ const api = async (path, method = "GET") => {
 
   return r.json();
 };
-
 const BADGE = {
   green: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
   yellow: "bg-amber-500/15 text-amber-300 border-amber-500/40",
